@@ -1,6 +1,7 @@
 package caddynomadsd
 
 import (
+	"fmt"
 	"net"
 	"net/http"
 	"strconv"
@@ -17,11 +18,6 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// TODO:
-//   support discovery by tag
-// 	 support connecting to unix socket
-// 	 support mTLS
-
 type Upstream = reverseproxy.Upstream
 
 var (
@@ -34,8 +30,10 @@ func init() {
 }
 
 type NomadSDUpstreams struct {
-	Name    string         `json:"name"`
-	Refresh caddy.Duration `json:"refresh,omitempty"`
+	Name      string         `json:"name"`
+	Tag       string         `json:"tag"`
+	Namespace string         `json:"namespace"`
+	Refresh   caddy.Duration `json:"refresh,omitempty"`
 
 	client *nomad.Client
 	logger *zap.Logger
@@ -73,7 +71,13 @@ func allNew(upstreams []Upstream) []*Upstream {
 }
 
 func (u NomadSDUpstreams) GetUpstreams(r *http.Request) ([]*Upstream, error) {
-	key := u.String()
+	repl := r.Context().Value(caddy.ReplacerCtxKey).(*caddy.Replacer)
+
+	tag := repl.ReplaceKnown(u.Tag, "")
+	name := repl.ReplaceKnown(u.Name, "")
+	namespace := repl.ReplaceKnown(u.Namespace, "")
+
+	key := tag + name + namespace
 
 	// first, use a cheap read-lock to return a cached result quickly
 	sdsMu.RLock()
@@ -95,12 +99,19 @@ func (u NomadSDUpstreams) GetUpstreams(r *http.Request) ([]*Upstream, error) {
 		return allNew(cached.upstreams), nil
 	}
 
-	if c := u.logger.Check(zapcore.DebugLevel, "refreshing nomad-sd upstreams"); c != nil {
-		c.Write(zap.String("name", u.Name))
+	opts := &nomad.QueryOptions{AllowStale: true}
+	if namespace != "" {
+		opts.Namespace = namespace
+	}
+	if tag != "" {
+		opts.Filter = fmt.Sprintf(`Tags contains "%s"`, tag)
 	}
 
-	opts := &nomad.QueryOptions{AllowStale: true}
-	srvs, _, err := u.client.Services().Get(u.Name, opts)
+	if c := u.logger.Check(zapcore.DebugLevel, "refreshing nomad-sd upstreams"); c != nil {
+		c.Write(zap.String("name", name), zap.Any("opts", opts))
+	}
+
+	srvs, _, err := u.client.Services().Get(name, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -109,9 +120,11 @@ func (u NomadSDUpstreams) GetUpstreams(r *http.Request) ([]*Upstream, error) {
 	for i, srv := range srvs {
 		port := strconv.Itoa(srv.Port)
 		if c := u.logger.Check(zapcore.DebugLevel, "discovered service records"); c != nil {
-			c.Write(zap.String("name", u.Name),
+			c.Write(zap.String("name", name),
 				zap.String("address", srv.Address),
-				zap.String("port", port))
+				zap.String("port", port),
+				zap.String("namespace", srv.Namespace),
+				zap.Strings("tags", srv.Tags))
 		}
 
 		upstreams[i] = Upstream{
@@ -161,6 +174,18 @@ func (u *NomadSDUpstreams) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 			}
 			u.Name = d.Val()
 
+		case "namespace":
+			if !d.NextArg() {
+				return d.ArgErr()
+			}
+			u.Namespace = d.Val()
+
+		case "tag":
+			if !d.NextArg() {
+				return d.ArgErr()
+			}
+			u.Tag = d.Val()
+
 		case "refresh":
 			if !d.NextArg() {
 				return d.ArgErr()
@@ -181,10 +206,6 @@ func (u *NomadSDUpstreams) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 	}
 
 	return nil
-}
-
-func (u NomadSDUpstreams) String() string {
-	return u.Name
 }
 
 type sdLookup struct {
