@@ -33,10 +33,11 @@ A request to `http-tag.my-service.my-ns.example.com` resolves to Nomad service `
 ```
 reverse_proxy {
     dynamic nomadsd <service_name> {
-        name      <service_name>   # required: Nomad service name
-        namespace <namespace>      # optional
-        tag       <tag>            # optional
-        refresh   <duration>       # optional: cache refresh interval (default: 1m)
+        name        <service_name>   # required: Nomad service name
+        namespace   <namespace>      # optional
+        tag         <tag>            # optional
+        refresh     <duration>       # optional: cache refresh interval (default: 1m)
+        strict_tags                  # optional: when set, only untagged instances are returned if no tag is specified
     }
 }
 ```

@@ -36,6 +36,7 @@ type NomadSDUpstreams struct {
 	Tag       string         `json:"tag"`
 	Namespace string         `json:"namespace"`
 	Refresh   caddy.Duration `json:"refresh,omitempty"`
+	StrictTags bool          `json:"strict_tags,omitempty"`
 
 	client *nomad.Client
 	logger *zap.Logger
@@ -121,6 +122,8 @@ func (u NomadSDUpstreams) GetUpstreams(r *http.Request) ([]*Upstream, error) {
 	}
 	if tag != "" {
 		opts.Filter = fmt.Sprintf(`Tags contains "%s"`, tag)
+	} else if u.StrictTags {
+		opts.Filter = `Tags is empty`
 	}
 
 	if c := u.logger.Check(zapcore.DebugLevel, "refreshing nomad-sd upstreams"); c != nil {
@@ -211,6 +214,9 @@ func (u *NomadSDUpstreams) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 				return d.Errf("parsing refresh interval duration: %v", err)
 			}
 			u.Refresh = caddy.Duration(dur)
+
+		case "strict_tags":
+			u.StrictTags = true
 
 		default:
 			return d.Errf("unrecognized srv option '%s'", d.Val())
