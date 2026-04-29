@@ -45,7 +45,7 @@ reverse_proxy {
 
 Set via environment variables:
 
-- `NOMAD_ADDR` - Nomad server address (default: `http://127.0.0.1:4646`)
+- `NOMAD_ADDR` - Nomad server address (default: `http://127.0.0.1:4646`, or `unix:///path/to/socket`)
 - `NOMAD_TOKEN` - ACL token
 - `NOMAD_CACERT` / `NOMAD_CAPATH` - CA cert for TLS
 - `NOMAD_CLIENT_CERT` / `NOMAD_CLIENT_KEY` - mTLS client cert/key
