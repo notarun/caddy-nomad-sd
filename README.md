@@ -1,6 +1,6 @@
 # Caddy Nomad Service Discovery
 
-Caddy module that provides dynamic upstream discovery from HashiCorp Nomad services.
+Caddy module that provides dynamic upstream discovery from HashiCorp Nomad services. Most of the code is adapted from [Caddy's SRV upstream source](https://github.com/caddyserver/caddy/blob/master/modules/caddyhttp/reverseproxy/upstreams.go).
 
 ## Installation
 
