@@ -1,10 +1,12 @@
 package caddynomadsd
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -53,7 +55,21 @@ func (u *NomadSDUpstreams) Provision(ctx caddy.Context) error {
 		u.Refresh = caddy.Duration(time.Minute)
 	}
 
-	client, err := nomad.NewClient(nomad.DefaultConfig())
+	config := nomad.DefaultConfig()
+
+	if strings.HasPrefix(config.Address, "unix://") {
+		socketPath := strings.TrimPrefix(config.Address, "unix://")
+		config.HttpClient = &http.Client{
+			Transport: &http.Transport{
+				DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+					return (&net.Dialer{}).DialContext(ctx, "unix", socketPath)
+				},
+			},
+		}
+		config.Address = "http://localhost"
+	}
+
+	client, err := nomad.NewClient(config)
 	if err != nil {
 		return err
 	}
