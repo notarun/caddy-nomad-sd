@@ -1,4 +1,4 @@
-module github.con/notarun/caddy-nomad-sd
+module github.com/notarun/caddy-nomad-sd
 
 go 1.26.2
 
